@@ -10,6 +10,7 @@ const authRoutes = require('./modules/auth/auth.routes');
 const memberRoutes = require('./modules/members/members.routes');
 const { plansRouter, membershipsRouter, historyRouter } = require('./modules/memberships/memberships.routes');
 const { attendanceRouter, historyRouter: attendanceHistoryRouter } = require('./modules/attendance/attendance.routes');
+const { trainersRouter, memberTrainerRouter } = require('./modules/trainer-workouts/trainer-workouts.routes');
 // TODO: as each module is implemented, require and mount its routes below,
 // following the same pattern as authRoutes / memberRoutes.
 
@@ -37,7 +38,9 @@ app.use('/api/v1/membership-plans', plansRouter);
 app.use('/api/v1/memberships', membershipsRouter);
 app.use('/api/v1/attendance', attendanceRouter);
 app.use('/api/v1/members', attendanceHistoryRouter); // adds GET /:memberId/attendance
-// ...remaining 10 modules mount here as they're built.
+app.use('/api/v1/trainers', trainersRouter);
+app.use('/api/v1/members', memberTrainerRouter); // adds POST /:memberId/assign-trainer, GET /:memberId/trainer-history
+// ...remaining 9 modules mount here as they're built.
 
 // 404 handler - must come after all routes, before the error handler.
 app.use((req, res) => {
