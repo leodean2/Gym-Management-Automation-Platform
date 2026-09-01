@@ -62,6 +62,25 @@ function updateMembership(id, data) {
   return prisma.membership.update({ where: { id }, data });
 }
 
+function createHistory(data) {
+  return prisma.membershipHistory.create({ data });
+}
+
+/**
+ * Includes membership (with its member_id) and membership_plan — the
+ * plan the invoice was actually priced/issued against, which is what
+ * activateMembershipFromPayment uses for duration_days, NOT
+ * membership.membership_plan (that only reflects the CURRENT paid-for
+ * plan, which is exactly what a pending renewal-with-plan-change invoice
+ * must not leak into early).
+ */
+function findInvoiceById(id) {
+  return prisma.invoice.findUnique({
+    where: { id },
+    include: { membership: true, membership_plan: true },
+  });
+}
+
 // --- Invoices (originate exclusively from Membership events) --------------
 
 function findPendingInvoiceForMembership(membershipId) {
@@ -98,6 +117,8 @@ module.exports = {
   createMembership,
   findMembershipById,
   updateMembership,
+  createHistory,
+  findInvoiceById,
   findPendingInvoiceForMembership,
   createInvoice,
   countInvoicesCreatedBetween,

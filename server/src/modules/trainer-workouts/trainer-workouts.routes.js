@@ -4,7 +4,7 @@ const asyncHandler = require('../../lib/asyncHandler');
 const authenticate = require('../../middleware/authenticate');
 const authorize = require('../../middleware/authorize');
 const validate = require('../../middleware/validate');
-const { registerTrainerSchema, updateTrainerSchema, assignTrainerSchema } = require('./trainers.validation');
+const { registerTrainerSchema, updateTrainerSchema, assignTrainerSchema } = require('./trainer-workouts.validation');
 const { ADMIN_ROLES, PROFILE_VIEW_ROLES, HISTORY_ROLES } = require('./trainers.constants');
 
 // Feature 5 — Trainer Management & Workout Programs (Pass 1)

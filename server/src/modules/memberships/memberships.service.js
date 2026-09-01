@@ -37,6 +37,7 @@ async function createInvoiceForMembership({ membershipId, plan, issuedBy }) {
     try {
       return await membershipsRepository.createInvoice({
         membership_id: membershipId,
+        membership_plan_id: plan.id,
         invoice_number: invoiceNumber,
         amount_due: plan.price,
         due_date: calculateDueDate(),
@@ -181,6 +182,7 @@ async function renewMembership(membershipId, input, actingUser) {
     if (plan.status !== 'Active') {
       throw AppError.conflict('PLAN_INACTIVE', 'This membership plan is not currently active');
     }
+
   }
 
   const invoice = await createInvoiceForMembership({
@@ -190,6 +192,68 @@ async function renewMembership(membershipId, input, actingUser) {
   });
 
   return { membership, invoice };
+}
+
+// --- Activation (called exclusively by payments.service.js) ----------------
+
+/**
+ * Called only after a successful payment against invoiceId. Reads the
+ * plan from the INVOICE, not from the membership — this is the whole
+ * point of the membership_plan_id snapshot: the Membership record must
+ * never reflect a plan change until payment actually completes, so a
+ * renewal-with-upgrade sitting Pending must not leak the new plan into
+ * an active membership. Determines InitialActivation vs Renewal from the
+ * membership's status at the moment of payment, applies the stacking
+ * (FR-3.4a) or reset (FR-3.4b) rule, updates Membership (including
+ * membership_plan_id, only now), and writes the MembershipHistory row.
+ */
+async function activateMembershipFromPayment({ invoiceId, actingUser }) {
+  const invoice = await membershipsRepository.findInvoiceById(invoiceId);
+  if (!invoice) {
+    throw AppError.notFound('Invoice not found');
+  }
+
+  const membership = invoice.membership;
+  const plan = invoice.membership_plan;
+
+  let eventType, periodStart, periodExpiry;
+  const now = new Date();
+
+  if (membership.status === 'Pending') {
+    eventType = 'InitialActivation';
+    periodStart = now;
+    periodExpiry = new Date(now.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+  } else if (membership.status === 'Active') {
+    // FR-3.4a — stacking: extend from current expiry_date.
+    eventType = 'Renewal';
+    periodStart = membership.expiry_date;
+    periodExpiry = new Date(membership.expiry_date.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+  } else {
+    // Expired (or anything else reaching here) — FR-3.4b reset.
+    eventType = 'Renewal';
+    periodStart = now;
+    periodExpiry = new Date(now.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+  }
+
+  const updatedMembership = await membershipsRepository.updateMembership(membership.id, {
+    status: 'Active',
+    membership_plan_id: plan.id,
+    start_date: periodStart,
+    expiry_date: periodExpiry,
+  });
+
+  await membershipsRepository.createHistory({
+    membership_id: membership.id,
+    member_id: membership.member_id,
+    membership_plan_id: plan.id,
+    invoice_id: invoice.id,
+    event_type: eventType,
+    period_start_date: periodStart,
+    period_expiry_date: periodExpiry,
+    recorded_by: actingUser.id,
+  });
+
+  return updatedMembership;
 }
 
 // --- View Membership (FR-3.x) -----------------------------------------------
@@ -257,6 +321,7 @@ module.exports = {
   updatePlan,
   createMembership,
   renewMembership,
+  activateMembershipFromPayment,
   getMembership,
   suspendMembership,
   getMembershipHistory,

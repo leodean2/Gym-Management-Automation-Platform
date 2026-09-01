@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // =====================================================
@@ -97,24 +98,24 @@ model User {
 }
 
 model Member {
-  id       String @id @default(uuid()) @db.Uuid
-  user_id  String @unique @db.Uuid
-  user     User   @relation("MemberUser", fields: [user_id], references: [id], onDelete: Restrict)
+  id      String @id @default(uuid()) @db.Uuid
+  user_id String @unique @db.Uuid
+  user    User   @relation("MemberUser", fields: [user_id], references: [id], onDelete: Restrict)
 
   created_by      String @db.Uuid
   created_by_user User   @relation("MemberCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
 
   membership_number       String   @unique
-  first_name               String
-  last_name                String
-  gender                    Gender
-  date_of_birth             DateTime @db.Date
-  phone_number              String
-  address                   String?
-  emergency_contact_name    String
-  emergency_contact_phone   String
-  medical_notes             String?
-  profile_photo_url         String?
+  first_name              String
+  last_name               String
+  gender                  Gender
+  date_of_birth           DateTime @db.Date
+  phone_number            String
+  address                 String?
+  emergency_contact_name  String
+  emergency_contact_phone String
+  medical_notes           String?
+  profile_photo_url       String?
 
   current_trainer_id String?  @db.Uuid
   current_trainer    Trainer? @relation("CurrentTrainer", fields: [current_trainer_id], references: [id], onDelete: SetNull)
@@ -132,6 +133,7 @@ model Member {
   personal_records            PersonalRecord[]
   bookings                    Booking[]
   linked_inquiries            Inquiry[]
+  trainer_assignment_history  TrainerAssignmentHistory[]
 
   @@index([current_trainer_id])
   @@index([created_by])
@@ -157,15 +159,15 @@ model Trainer {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  current_members              Member[]                   @relation("CurrentTrainer")
-  templates_created             WorkoutProgramTemplate[]   @relation("WorkoutProgramTemplateCreatedBy")
-  workout_program_assignments   WorkoutProgramAssignment[]
-  nutrition_templates_created   NutritionPlanTemplate[]    @relation("NutritionPlanTemplateCreatedBy")
-  nutrition_plan_assignments    NutritionPlanAssignment[]
-  previous_assignments          TrainerAssignmentHistory[] @relation("PreviousTrainer")
-  new_assignments                TrainerAssignmentHistory[] @relation("NewTrainer")
-  availabilities TrainerAvailability[]
-  bookings       Booking[]
+  current_members             Member[]                   @relation("CurrentTrainer")
+  templates_created           WorkoutProgramTemplate[]   @relation("WorkoutProgramTemplateCreatedBy")
+  workout_program_assignments WorkoutProgramAssignment[]
+  nutrition_templates_created NutritionPlanTemplate[]    @relation("NutritionPlanTemplateCreatedBy")
+  nutrition_plan_assignments  NutritionPlanAssignment[]
+  previous_assignments        TrainerAssignmentHistory[] @relation("PreviousTrainer")
+  new_assignments             TrainerAssignmentHistory[] @relation("NewTrainer")
+  availabilities              TrainerAvailability[]
+  bookings                    Booking[]
 
   @@index([created_by])
   @@map("trainers")
@@ -215,7 +217,7 @@ model MembershipPlan {
   price         Decimal              @db.Decimal(10, 2)
   status        MembershipPlanStatus @default(Active)
 
-  created_by String @db.Uuid
+  created_by String  @db.Uuid
   updated_by String? @db.Uuid
 
   created_by_user User  @relation("MembershipPlanCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
@@ -225,6 +227,7 @@ model MembershipPlan {
   updated_at DateTime @updatedAt
 
   memberships Membership[]
+  invoices    Invoice[]
   history     MembershipHistory[]
 
   @@index([created_by])
@@ -233,12 +236,12 @@ model MembershipPlan {
 }
 
 model Membership {
-  id                 String            @id @default(uuid()) @db.Uuid
-  member_id          String            @db.Uuid
-  membership_plan_id String            @db.Uuid
-  start_date         DateTime?         @db.Date
-  expiry_date        DateTime?         @db.Date
-  status             MembershipStatus  @default(Pending)
+  id                 String           @id @default(uuid()) @db.Uuid
+  member_id          String           @db.Uuid
+  membership_plan_id String           @db.Uuid
+  start_date         DateTime?        @db.Date
+  expiry_date        DateTime?        @db.Date
+  status             MembershipStatus @default(Pending)
   suspended_reason   String?
 
   created_by String  @db.Uuid
@@ -252,14 +255,9 @@ model Membership {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  history  MembershipHistory[]
-  invoices Invoice[]
-
-  @@index([member_id])
-  @@index([membership_plan_id])
-  @@index([created_by])
-  @@index([updated_by])
-  @@map("memberships")
+  history     MembershipHistory[]
+  invoices    Invoice[]
+  attendances Attendance[]
 
   // NOTE: PostgreSQL partial unique index enforcing "one Active
   // membership per member" (FR-3.11) must be added manually in the
@@ -267,25 +265,31 @@ model Membership {
   // unique indexes.
   //   CREATE UNIQUE INDEX memberships_one_active_per_member
   //   ON memberships (member_id) WHERE status = 'Active';
+
+  @@index([member_id])
+  @@index([membership_plan_id])
+  @@index([created_by])
+  @@index([updated_by])
+  @@map("memberships")
 }
 
 model MembershipHistory {
-  id                  String                     @id @default(uuid()) @db.Uuid
-  membership_id       String                     @db.Uuid
-  member_id           String                     @db.Uuid
-  membership_plan_id  String                     @db.Uuid
-  invoice_id          String?                    @db.Uuid
-  event_type          MembershipHistoryEventType
-  period_start_date   DateTime                   @db.Date
-  period_expiry_date  DateTime                   @db.Date
-  recorded_by         String                     @db.Uuid
-  recorded_at         DateTime                   @default(now())
+  id                 String                     @id @default(uuid()) @db.Uuid
+  membership_id      String                     @db.Uuid
+  member_id          String                     @db.Uuid
+  membership_plan_id String                     @db.Uuid
+  invoice_id         String?                    @db.Uuid
+  event_type         MembershipHistoryEventType
+  period_start_date  DateTime                   @db.Date
+  period_expiry_date DateTime                   @db.Date
+  recorded_by        String                     @db.Uuid
+  recorded_at        DateTime                   @default(now())
 
-  membership       Membership      @relation(fields: [membership_id], references: [id], onDelete: Restrict)
-  member           Member          @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  membership_plan  MembershipPlan  @relation(fields: [membership_plan_id], references: [id], onDelete: Restrict)
-  invoice          Invoice?        @relation(fields: [invoice_id], references: [id], onDelete: Restrict)
-  recorded_by_user User            @relation(fields: [recorded_by], references: [id], onDelete: Restrict)
+  membership       Membership     @relation(fields: [membership_id], references: [id], onDelete: Restrict)
+  member           Member         @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  membership_plan  MembershipPlan @relation(fields: [membership_plan_id], references: [id], onDelete: Restrict)
+  invoice          Invoice?       @relation(fields: [invoice_id], references: [id], onDelete: Restrict)
+  recorded_by_user User           @relation(fields: [recorded_by], references: [id], onDelete: Restrict)
 
   @@index([membership_id])
   @@index([member_id])
@@ -326,6 +330,7 @@ enum PaymentMethod {
 model Invoice {
   id                  String        @id @default(uuid()) @db.Uuid
   membership_id       String        @db.Uuid
+  membership_plan_id  String        @db.Uuid
   invoice_number      String        @unique
   amount_due          Decimal       @db.Decimal(10, 2)
   due_date            DateTime
@@ -336,6 +341,7 @@ model Invoice {
   created_at          DateTime      @default(now())
 
   membership           Membership          @relation(fields: [membership_id], references: [id], onDelete: Restrict)
+  membership_plan      MembershipPlan      @relation(fields: [membership_plan_id], references: [id], onDelete: Restrict)
   issued_by_user       User                @relation("InvoiceIssuedBy", fields: [issued_by], references: [id], onDelete: Restrict)
   replaces_invoice     Invoice?            @relation("InvoiceCorrection", fields: [replaces_invoice_id], references: [id], onDelete: Restrict)
   replacement_invoices Invoice[]           @relation("InvoiceCorrection")
@@ -343,23 +349,24 @@ model Invoice {
   membership_history   MembershipHistory[]
 
   @@index([membership_id])
+  @@index([membership_plan_id])
   @@index([issued_by])
   @@index([replaces_invoice_id])
   @@map("invoices")
 }
 
 model PaymentTransaction {
-  id                    String                    @id @default(uuid()) @db.Uuid
-  invoice_id            String                    @unique @db.Uuid
-  amount_paid           Decimal                   @db.Decimal(10, 2)
+  id                    String                   @id @default(uuid()) @db.Uuid
+  invoice_id            String                   @unique @db.Uuid
+  amount_paid           Decimal                  @db.Decimal(10, 2)
   payment_method        PaymentMethod
   transaction_reference String?
-  status                PaymentTransactionStatus  @default(Successful)
-  recorded_by           String                    @db.Uuid
-  replaces_payment_id   String?                   @db.Uuid
+  status                PaymentTransactionStatus @default(Successful)
+  recorded_by           String                   @db.Uuid
+  replaces_payment_id   String?                  @db.Uuid
   void_reason           String?
   payment_date          DateTime
-  created_at            DateTime                  @default(now())
+  created_at            DateTime                 @default(now())
 
   invoice              Invoice              @relation(fields: [invoice_id], references: [id], onDelete: Restrict)
   recorded_by_user     User                 @relation("PaymentRecordedBy", fields: [recorded_by], references: [id], onDelete: Restrict)
@@ -373,14 +380,14 @@ model PaymentTransaction {
 }
 
 model Receipt {
-  id                      String        @id @default(uuid()) @db.Uuid
-  payment_transaction_id  String        @unique @db.Uuid
-  receipt_number          String        @unique
-  status                  ReceiptStatus @default(Issued)
-  replaces_receipt_id     String?       @db.Uuid
-  void_reason             String?
-  issued_at               DateTime
-  created_at               DateTime     @default(now())
+  id                     String        @id @default(uuid()) @db.Uuid
+  payment_transaction_id String        @unique @db.Uuid
+  receipt_number         String        @unique
+  status                 ReceiptStatus @default(Issued)
+  replaces_receipt_id    String?       @db.Uuid
+  void_reason            String?
+  issued_at              DateTime
+  created_at             DateTime      @default(now())
 
   payment_transaction  PaymentTransaction @relation(fields: [payment_transaction_id], references: [id], onDelete: Restrict)
   replaces_receipt     Receipt?           @relation("ReceiptCorrection", fields: [replaces_receipt_id], references: [id], onDelete: Restrict)
@@ -400,22 +407,22 @@ enum AttendanceStatus {
 }
 
 model Attendance {
-  id                      String           @id @default(uuid()) @db.Uuid
-  member_id                String          @db.Uuid
-  membership_id             String          @db.Uuid
-  attendance_date           DateTime        @db.Date
-  check_in_time              DateTime
-  status                     AttendanceStatus @default(Present)
-  created_by                 String          @db.Uuid
-  replaces_attendance_id     String?         @db.Uuid
-  correction_reason          String?
-  created_at                 DateTime        @default(now())
+  id                     String           @id @default(uuid()) @db.Uuid
+  member_id              String           @db.Uuid
+  membership_id          String           @db.Uuid
+  attendance_date        DateTime         @db.Date
+  check_in_time          DateTime
+  status                 AttendanceStatus @default(Present)
+  created_by             String           @db.Uuid
+  replaces_attendance_id String?          @db.Uuid
+  correction_reason      String?
+  created_at             DateTime         @default(now())
 
   member                 Member       @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  membership              Membership   @relation(fields: [membership_id], references: [id], onDelete: Restrict)
-  created_by_user          User         @relation("AttendanceCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
-  replaces_attendance      Attendance?  @relation("AttendanceCorrection", fields: [replaces_attendance_id], references: [id], onDelete: Restrict)
-  replacement_attendance   Attendance[] @relation("AttendanceCorrection")
+  membership             Membership   @relation(fields: [membership_id], references: [id], onDelete: Restrict)
+  created_by_user        User         @relation("AttendanceCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
+  replaces_attendance    Attendance?  @relation("AttendanceCorrection", fields: [replaces_attendance_id], references: [id], onDelete: Restrict)
+  replacement_attendance Attendance[] @relation("AttendanceCorrection")
 
   @@index([member_id])
   @@index([membership_id])
@@ -474,13 +481,13 @@ model WorkoutProgramTemplate {
 }
 
 model WorkoutProgramSession {
-  id                           String   @id @default(uuid()) @db.Uuid
-  workout_program_template_id  String   @db.Uuid
-  session_name                 String
-  description                  String?
-  session_order                Int
-  created_at                   DateTime @default(now())
-  updated_at                   DateTime @updatedAt
+  id                          String   @id @default(uuid()) @db.Uuid
+  workout_program_template_id String   @db.Uuid
+  session_name                String
+  description                 String?
+  session_order               Int
+  created_at                  DateTime @default(now())
+  updated_at                  DateTime @updatedAt
 
   template WorkoutProgramTemplate @relation(fields: [workout_program_template_id], references: [id], onDelete: Restrict)
 
@@ -493,20 +500,20 @@ model WorkoutProgramSession {
 }
 
 model TemplateExercise {
-  id                          String   @id @default(uuid()) @db.Uuid
-  workout_program_session_id  String   @db.Uuid
-  exercise_library_entry_id   String   @db.Uuid
-  exercise_order               Int
-  target_sets                  Int
-  target_reps                  String
-  target_weight                Decimal? @db.Decimal(6, 2)
-  rest_seconds                 Int?
-  notes                        String?
-  created_at                   DateTime @default(now())
-  updated_at                   DateTime @updatedAt
+  id                         String   @id @default(uuid()) @db.Uuid
+  workout_program_session_id String   @db.Uuid
+  exercise_library_entry_id  String   @db.Uuid
+  exercise_order             Int
+  target_sets                Int
+  target_reps                String
+  target_weight              Decimal? @db.Decimal(6, 2)
+  rest_seconds               Int?
+  notes                      String?
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @updatedAt
 
   workout_program_session WorkoutProgramSession @relation(fields: [workout_program_session_id], references: [id], onDelete: Restrict)
-  exercise                 ExerciseLibraryEntry  @relation(fields: [exercise_library_entry_id], references: [id], onDelete: Restrict)
+  exercise                ExerciseLibraryEntry  @relation(fields: [exercise_library_entry_id], references: [id], onDelete: Restrict)
 
   workout_exercises WorkoutExercise[]
 
@@ -517,20 +524,20 @@ model TemplateExercise {
 }
 
 model WorkoutProgramAssignment {
-  id                           String                          @id @default(uuid()) @db.Uuid
-  member_id                    String                          @db.Uuid
-  trainer_id                   String                          @db.Uuid
-  workout_program_template_id  String                          @db.Uuid
-  start_date                   DateTime?                       @db.Date
-  assigned_date                 DateTime                       @db.Date
-  completion_date               DateTime?                      @db.Date
-  assignment_notes              String?
-  status                        WorkoutProgramAssignmentStatus @default(Active)
-  created_at                    DateTime                       @default(now())
-  updated_at                    DateTime                       @updatedAt
+  id                          String                         @id @default(uuid()) @db.Uuid
+  member_id                   String                         @db.Uuid
+  trainer_id                  String                         @db.Uuid
+  workout_program_template_id String                         @db.Uuid
+  start_date                  DateTime?                      @db.Date
+  assigned_date               DateTime                       @db.Date
+  completion_date             DateTime?                      @db.Date
+  assignment_notes            String?
+  status                      WorkoutProgramAssignmentStatus @default(Active)
+  created_at                  DateTime                       @default(now())
+  updated_at                  DateTime                       @updatedAt
 
-  member  Member                 @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  trainer Trainer                @relation(fields: [trainer_id], references: [id], onDelete: Restrict)
+  member   Member                 @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  trainer  Trainer                @relation(fields: [trainer_id], references: [id], onDelete: Restrict)
   template WorkoutProgramTemplate @relation(fields: [workout_program_template_id], references: [id], onDelete: Restrict)
 
   workout_sessions WorkoutSession[]
@@ -542,19 +549,19 @@ model WorkoutProgramAssignment {
 }
 
 model TrainerAssignmentHistory {
-  id                   String   @id @default(uuid()) @db.Uuid
-  member_id             String  @db.Uuid
-  previous_trainer_id   String? @db.Uuid
-  new_trainer_id        String  @db.Uuid
-  reassigned_by         String  @db.Uuid
-  reassigned_at          DateTime
-  reason                 String?
-  created_at              DateTime @default(now())
+  id                  String   @id @default(uuid()) @db.Uuid
+  member_id           String   @db.Uuid
+  previous_trainer_id String?  @db.Uuid
+  new_trainer_id      String   @db.Uuid
+  reassigned_by       String   @db.Uuid
+  reassigned_at       DateTime
+  reason              String?
+  created_at          DateTime @default(now())
 
-  member              Member  @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  previous_trainer    Trainer? @relation("PreviousTrainer", fields: [previous_trainer_id], references: [id], onDelete: SetNull)
-  new_trainer          Trainer @relation("NewTrainer", fields: [new_trainer_id], references: [id], onDelete: Restrict)
-  reassigned_by_user   User    @relation("TrainerAssignmentReassignedBy", fields: [reassigned_by], references: [id], onDelete: Restrict)
+  member             Member   @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  previous_trainer   Trainer? @relation("PreviousTrainer", fields: [previous_trainer_id], references: [id], onDelete: SetNull)
+  new_trainer        Trainer  @relation("NewTrainer", fields: [new_trainer_id], references: [id], onDelete: Restrict)
+  reassigned_by_user User     @relation("TrainerAssignmentReassignedBy", fields: [reassigned_by], references: [id], onDelete: Restrict)
 
   @@index([member_id])
   @@index([previous_trainer_id])
@@ -586,8 +593,8 @@ enum NutritionPlanAssignmentStatus {
 }
 
 model NutritionPlanTemplate {
-  id                   String                       @id @default(uuid()) @db.Uuid
-  created_by           String                       @db.Uuid
+  id                   String                      @id @default(uuid()) @db.Uuid
+  created_by           String                      @db.Uuid
   name                 String
   goal                 NutritionGoal
   meal_guidelines      String
@@ -595,9 +602,9 @@ model NutritionPlanTemplate {
   protein_grams        Int?
   carbohydrates_grams  Int?
   fats_grams           Int?
-  status               NutritionPlanTemplateStatus  @default(Active)
-  created_at           DateTime                     @default(now())
-  updated_at           DateTime                     @updatedAt
+  status               NutritionPlanTemplateStatus @default(Active)
+  created_at           DateTime                    @default(now())
+  updated_at           DateTime                    @updatedAt
 
   created_by_trainer Trainer @relation("NutritionPlanTemplateCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
 
@@ -608,21 +615,21 @@ model NutritionPlanTemplate {
 }
 
 model NutritionPlanAssignment {
-  id                          String                         @id @default(uuid()) @db.Uuid
-  member_id                    String                        @db.Uuid
-  trainer_id                   String                        @db.Uuid
-  nutrition_plan_template_id   String                        @db.Uuid
-  assigned_date                 DateTime                     @db.Date
-  start_date                    DateTime?                    @db.Date
-  completion_date               DateTime?                    @db.Date
-  status                        NutritionPlanAssignmentStatus @default(Active)
-  assignment_notes              String?
-  created_at                    DateTime                     @default(now())
-  updated_at                    DateTime                     @updatedAt
+  id                         String                        @id @default(uuid()) @db.Uuid
+  member_id                  String                        @db.Uuid
+  trainer_id                 String                        @db.Uuid
+  nutrition_plan_template_id String                        @db.Uuid
+  assigned_date              DateTime                      @db.Date
+  start_date                 DateTime?                     @db.Date
+  completion_date            DateTime?                     @db.Date
+  status                     NutritionPlanAssignmentStatus @default(Active)
+  assignment_notes           String?
+  created_at                 DateTime                      @default(now())
+  updated_at                 DateTime                      @updatedAt
 
-  member   Member                 @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  trainer  Trainer                @relation(fields: [trainer_id], references: [id], onDelete: Restrict)
-  template NutritionPlanTemplate  @relation(fields: [nutrition_plan_template_id], references: [id], onDelete: Restrict)
+  member   Member                @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  trainer  Trainer               @relation(fields: [trainer_id], references: [id], onDelete: Restrict)
+  template NutritionPlanTemplate @relation(fields: [nutrition_plan_template_id], references: [id], onDelete: Restrict)
 
   @@index([member_id])
   @@index([trainer_id])
@@ -640,23 +647,23 @@ enum WorkoutSessionStatus {
 }
 
 model WorkoutSession {
-  id                              String               @id @default(uuid()) @db.Uuid
-  member_id                       String               @db.Uuid
-  workout_program_assignment_id   String               @db.Uuid
-  workout_program_session_id      String               @db.Uuid
-  session_date                    DateTime             @db.Date
-  started_at                      DateTime?
-  completed_at                    DateTime?
-  status                          WorkoutSessionStatus @default(InProgress)
-  finalized_by                    String?              @db.Uuid
-  notes                           String?
-  created_at                      DateTime             @default(now())
-  updated_at                      DateTime             @updatedAt
+  id                            String               @id @default(uuid()) @db.Uuid
+  member_id                     String               @db.Uuid
+  workout_program_assignment_id String               @db.Uuid
+  workout_program_session_id    String               @db.Uuid
+  session_date                  DateTime             @db.Date
+  started_at                    DateTime?
+  completed_at                  DateTime?
+  status                        WorkoutSessionStatus @default(InProgress)
+  finalized_by                  String?              @db.Uuid
+  notes                         String?
+  created_at                    DateTime             @default(now())
+  updated_at                    DateTime             @updatedAt
 
-  member                     Member                    @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  workout_program_assignment WorkoutProgramAssignment  @relation(fields: [workout_program_assignment_id], references: [id], onDelete: Restrict)
-  workout_program_session    WorkoutProgramSession     @relation(fields: [workout_program_session_id], references: [id], onDelete: Restrict)
-  finalized_by_user          User?                     @relation("WorkoutSessionFinalizedBy", fields: [finalized_by], references: [id], onDelete: SetNull)
+  member                     Member                   @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  workout_program_assignment WorkoutProgramAssignment @relation(fields: [workout_program_assignment_id], references: [id], onDelete: Restrict)
+  workout_program_session    WorkoutProgramSession    @relation(fields: [workout_program_session_id], references: [id], onDelete: Restrict)
+  finalized_by_user          User?                    @relation("WorkoutSessionFinalizedBy", fields: [finalized_by], references: [id], onDelete: SetNull)
 
   exercises      WorkoutExercise[]
   reopen_history WorkoutSessionReopenHistory[]
@@ -668,23 +675,23 @@ model WorkoutSession {
 }
 
 model WorkoutExercise {
-  id                          String   @id @default(uuid()) @db.Uuid
-  workout_session_id          String   @db.Uuid
-  template_exercise_id        String?  @db.Uuid
-  exercise_library_entry_id   String   @db.Uuid
-  performed_sets               Int?
-  performed_reps               Int?
-  performed_weight             Decimal? @db.Decimal(6, 2)
-  rest_seconds                 Int?
-  duration_seconds             Int?
-  distance                     Decimal? @db.Decimal(8, 2)
-  perceived_exertion           Int?
-  notes                        String?
-  created_at                   DateTime @default(now())
-  updated_at                   DateTime @updatedAt
+  id                        String   @id @default(uuid()) @db.Uuid
+  workout_session_id        String   @db.Uuid
+  template_exercise_id      String?  @db.Uuid
+  exercise_library_entry_id String   @db.Uuid
+  performed_sets            Int?
+  performed_reps            Int?
+  performed_weight          Decimal? @db.Decimal(6, 2)
+  rest_seconds              Int?
+  duration_seconds          Int?
+  distance                  Decimal? @db.Decimal(8, 2)
+  perceived_exertion        Int?
+  notes                     String?
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
 
-  workout_session   WorkoutSession    @relation(fields: [workout_session_id], references: [id], onDelete: Restrict)
-  template_exercise TemplateExercise? @relation(fields: [template_exercise_id], references: [id], onDelete: SetNull)
+  workout_session   WorkoutSession       @relation(fields: [workout_session_id], references: [id], onDelete: Restrict)
+  template_exercise TemplateExercise?    @relation(fields: [template_exercise_id], references: [id], onDelete: SetNull)
   exercise          ExerciseLibraryEntry @relation(fields: [exercise_library_entry_id], references: [id], onDelete: Restrict)
 
   personal_records PersonalRecord[]
@@ -696,12 +703,12 @@ model WorkoutExercise {
 }
 
 model WorkoutSessionReopenHistory {
-  id                  String   @id @default(uuid()) @db.Uuid
-  workout_session_id  String   @db.Uuid
-  reopened_by         String   @db.Uuid
-  reopened_at         DateTime
-  reason              String
-  created_at          DateTime @default(now())
+  id                 String   @id @default(uuid()) @db.Uuid
+  workout_session_id String   @db.Uuid
+  reopened_by        String   @db.Uuid
+  reopened_at        DateTime
+  reason             String
+  created_at         DateTime @default(now())
 
   workout_session  WorkoutSession @relation(fields: [workout_session_id], references: [id], onDelete: Restrict)
   reopened_by_user User           @relation("WorkoutSessionReopenedBy", fields: [reopened_by], references: [id], onDelete: Restrict)
@@ -716,25 +723,25 @@ model WorkoutSessionReopenHistory {
 // =====================================================
 
 model BodyMeasurement {
-  id                String   @id @default(uuid()) @db.Uuid
-  member_id          String  @db.Uuid
-  recorded_by         String @db.Uuid
-  measurement_date     DateTime @db.Date
-  weight_kg            Decimal? @db.Decimal(5, 2)
-  body_fat_percentage  Decimal? @db.Decimal(5, 2)
-  chest_cm             Decimal? @db.Decimal(5, 2)
-  waist_cm             Decimal? @db.Decimal(5, 2)
-  hips_cm              Decimal? @db.Decimal(5, 2)
-  left_arm_cm          Decimal? @db.Decimal(5, 2)
-  right_arm_cm         Decimal? @db.Decimal(5, 2)
-  left_thigh_cm        Decimal? @db.Decimal(5, 2)
-  right_thigh_cm       Decimal? @db.Decimal(5, 2)
-  notes                String?
-  created_at            DateTime @default(now())
-  updated_at            DateTime @updatedAt
+  id                  String   @id @default(uuid()) @db.Uuid
+  member_id           String   @db.Uuid
+  recorded_by         String   @db.Uuid
+  measurement_date    DateTime @db.Date
+  weight_kg           Decimal? @db.Decimal(5, 2)
+  body_fat_percentage Decimal? @db.Decimal(5, 2)
+  chest_cm            Decimal? @db.Decimal(5, 2)
+  waist_cm            Decimal? @db.Decimal(5, 2)
+  hips_cm             Decimal? @db.Decimal(5, 2)
+  left_arm_cm         Decimal? @db.Decimal(5, 2)
+  right_arm_cm        Decimal? @db.Decimal(5, 2)
+  left_thigh_cm       Decimal? @db.Decimal(5, 2)
+  right_thigh_cm      Decimal? @db.Decimal(5, 2)
+  notes               String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
 
-  member            Member @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  recorded_by_user  User   @relation("BodyMeasurementRecordedBy", fields: [recorded_by], references: [id], onDelete: Restrict)
+  member           Member @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  recorded_by_user User   @relation("BodyMeasurementRecordedBy", fields: [recorded_by], references: [id], onDelete: Restrict)
 
   @@index([member_id])
   @@index([recorded_by])
@@ -743,14 +750,14 @@ model BodyMeasurement {
 }
 
 model PersonalRecord {
-  id                          String   @id @default(uuid()) @db.Uuid
-  member_id                    String  @db.Uuid
-  exercise_library_entry_id    String  @db.Uuid
-  workout_exercise_id          String  @db.Uuid
-  best_weight                   Decimal @db.Decimal(6, 2)
-  achieved_at                    DateTime
-  created_at                     DateTime @default(now())
-  updated_at                     DateTime @updatedAt
+  id                        String   @id @default(uuid()) @db.Uuid
+  member_id                 String   @db.Uuid
+  exercise_library_entry_id String   @db.Uuid
+  workout_exercise_id       String   @db.Uuid
+  best_weight               Decimal  @db.Decimal(6, 2)
+  achieved_at               DateTime
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
 
   member           Member               @relation(fields: [member_id], references: [id], onDelete: Restrict)
   exercise         ExerciseLibraryEntry @relation(fields: [exercise_library_entry_id], references: [id], onDelete: Restrict)
@@ -787,16 +794,16 @@ enum ExerciseLibraryStatus {
 }
 
 model ExerciseLibraryEntry {
-  id             String                 @id @default(uuid()) @db.Uuid
-  name           String                 @unique
-  category       ExerciseCategory
-  exercise_type  ExerciseType
-  muscle_group   String
-  description    String?
-  status         ExerciseLibraryStatus  @default(Active)
-  created_by     String                 @db.Uuid
-  created_at     DateTime               @default(now())
-  updated_at     DateTime               @updatedAt
+  id            String                @id @default(uuid()) @db.Uuid
+  name          String                @unique
+  category      ExerciseCategory
+  exercise_type ExerciseType
+  muscle_group  String
+  description   String?
+  status        ExerciseLibraryStatus @default(Active)
+  created_by    String                @db.Uuid
+  created_at    DateTime              @default(now())
+  updated_at    DateTime              @updatedAt
 
   created_by_user User @relation("ExerciseLibraryCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
 
@@ -832,13 +839,13 @@ enum BookingPreviousStatus {
 
 model TrainerAvailability {
   id                String                    @id @default(uuid()) @db.Uuid
-  trainer_id         String                    @db.Uuid
-  availability_date   DateTime                  @db.Date
-  start_time           DateTime                  @db.Time(6)
-  end_time             DateTime                  @db.Time(6)
-  status               TrainerAvailabilityStatus @default(Available)
-  created_at            DateTime                  @default(now())
-  updated_at            DateTime                  @updatedAt
+  trainer_id        String                    @db.Uuid
+  availability_date DateTime                  @db.Date
+  start_time        DateTime                  @db.Time(6)
+  end_time          DateTime                  @db.Time(6)
+  status            TrainerAvailabilityStatus @default(Available)
+  created_at        DateTime                  @default(now())
+  updated_at        DateTime                  @updatedAt
 
   trainer  Trainer   @relation(fields: [trainer_id], references: [id], onDelete: Restrict)
   bookings Booking[]
@@ -849,33 +856,27 @@ model TrainerAvailability {
 }
 
 model Booking {
-  id                        String        @id @default(uuid()) @db.Uuid
-  member_id                  String       @db.Uuid
-  trainer_id                  String       @db.Uuid
-  trainer_availability_id      String       @db.Uuid
-  booking_date                  DateTime     @db.Date
-  start_time                     DateTime     @db.Time(6)
-  end_time                       DateTime     @db.Time(6)
-  status                          BookingStatus @default(Scheduled)
-  cancellation_reason             String?
-  notes                           String?
-  created_by                      String       @db.Uuid
-  created_at                       DateTime     @default(now())
-  updated_at                       DateTime     @updatedAt
+  id                      String        @id @default(uuid()) @db.Uuid
+  member_id               String        @db.Uuid
+  trainer_id              String        @db.Uuid
+  trainer_availability_id String        @db.Uuid
+  booking_date            DateTime      @db.Date
+  start_time              DateTime      @db.Time(6)
+  end_time                DateTime      @db.Time(6)
+  status                  BookingStatus @default(Scheduled)
+  cancellation_reason     String?
+  notes                   String?
+  created_by              String        @db.Uuid
+  created_at              DateTime      @default(now())
+  updated_at              DateTime      @updatedAt
 
-  member                 Member              @relation(fields: [member_id], references: [id], onDelete: Restrict)
-  trainer                 Trainer             @relation(fields: [trainer_id], references: [id], onDelete: Restrict)
-  trainer_availability      TrainerAvailability @relation(fields: [trainer_availability_id], references: [id], onDelete: Restrict)
-  created_by_user            User                @relation("BookingCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
+  member               Member              @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  trainer              Trainer             @relation(fields: [trainer_id], references: [id], onDelete: Restrict)
+  trainer_availability TrainerAvailability @relation(fields: [trainer_availability_id], references: [id], onDelete: Restrict)
+  created_by_user      User                @relation("BookingCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
 
   reschedule_history BookingRescheduleHistory[]
-  reopen_history      BookingReopenHistory[]
-
-  @@index([member_id])
-  @@index([trainer_id])
-  @@index([trainer_availability_id])
-  @@index([booking_date])
-  @@map("bookings")
+  reopen_history     BookingReopenHistory[]
 
   // NOTE: PostgreSQL exclusion constraint preventing overlapping
   // Scheduled bookings per trainer (FR-10.4) must be added manually
@@ -886,23 +887,29 @@ model Booking {
   //     trainer_id WITH =,
   //     tsrange(booking_date + start_time, booking_date + end_time) WITH &&
   //   ) WHERE (status = 'Scheduled');
+
+  @@index([member_id])
+  @@index([trainer_id])
+  @@index([trainer_availability_id])
+  @@index([booking_date])
+  @@map("bookings")
 }
 
 model BookingRescheduleHistory {
-  id                      String   @id @default(uuid()) @db.Uuid
-  booking_id               String  @db.Uuid
-  previous_booking_date     DateTime @db.Date
-  previous_start_time       DateTime @db.Time(6)
-  previous_end_time         DateTime @db.Time(6)
-  new_booking_date           DateTime @db.Date
-  new_start_time              DateTime @db.Time(6)
-  new_end_time                 DateTime @db.Time(6)
-  rescheduled_by                String  @db.Uuid
-  rescheduled_at                 DateTime
-  reason                          String
+  id                    String   @id @default(uuid()) @db.Uuid
+  booking_id            String   @db.Uuid
+  previous_booking_date DateTime @db.Date
+  previous_start_time   DateTime @db.Time(6)
+  previous_end_time     DateTime @db.Time(6)
+  new_booking_date      DateTime @db.Date
+  new_start_time        DateTime @db.Time(6)
+  new_end_time          DateTime @db.Time(6)
+  rescheduled_by        String   @db.Uuid
+  rescheduled_at        DateTime
+  reason                String
 
-  booking              Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-  rescheduled_by_user  User    @relation("BookingRescheduledBy", fields: [rescheduled_by], references: [id], onDelete: Restrict)
+  booking             Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
+  rescheduled_by_user User    @relation("BookingRescheduledBy", fields: [rescheduled_by], references: [id], onDelete: Restrict)
 
   @@index([booking_id])
   @@index([rescheduled_by])
@@ -910,15 +917,15 @@ model BookingRescheduleHistory {
 }
 
 model BookingReopenHistory {
-  id                String                 @id @default(uuid()) @db.Uuid
-  booking_id         String                @db.Uuid
-  previous_status     BookingPreviousStatus
-  reopened_by          String                @db.Uuid
-  reopened_at            DateTime
-  reason                  String
+  id              String                @id @default(uuid()) @db.Uuid
+  booking_id      String                @db.Uuid
+  previous_status BookingPreviousStatus
+  reopened_by     String                @db.Uuid
+  reopened_at     DateTime
+  reason          String
 
-  booking           Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-  reopened_by_user  User    @relation("BookingReopenedBy", fields: [reopened_by], references: [id], onDelete: Restrict)
+  booking          Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
+  reopened_by_user User    @relation("BookingReopenedBy", fields: [reopened_by], references: [id], onDelete: Restrict)
 
   @@index([booking_id])
   @@index([reopened_by])
@@ -955,6 +962,7 @@ enum NotificationStatus {
   Pending
   Sent
   Failed
+  Read
 }
 
 enum RelatedEntityType {
@@ -977,16 +985,17 @@ enum NotificationAttemptStatus {
 }
 
 model Notification {
-  id                    String              @id @default(uuid()) @db.Uuid
-  notification_type      NotificationType
-  recipient_user_id        String?           @db.Uuid
-  recipient_email            String
-  channel                     NotificationChannel @default(Email)
-  related_entity_type          RelatedEntityType
-  related_entity_id              String            @db.Uuid
-  status                          NotificationStatus @default(Pending)
-  sent_at                          DateTime?
-  created_at                        DateTime          @default(now())
+  id                  String              @id @default(uuid()) @db.Uuid
+  notification_type   NotificationType
+  recipient_user_id   String?             @db.Uuid
+  recipient_email     String
+  channel             NotificationChannel @default(Email)
+  related_entity_type RelatedEntityType
+  related_entity_id   String              @db.Uuid
+  status              NotificationStatus  @default(Pending)
+  read_at             DateTime?
+  sent_at             DateTime?
+  created_at          DateTime            @default(now())
 
   recipient_user User? @relation("NotificationRecipient", fields: [recipient_user_id], references: [id], onDelete: SetNull)
 
@@ -999,14 +1008,14 @@ model Notification {
 }
 
 model NotificationAttempt {
-  id                    String                    @id @default(uuid()) @db.Uuid
-  notification_id        String                    @db.Uuid
-  attempt_number           Int
-  status                     NotificationAttemptStatus
-  attempted_at                 DateTime
-  provider_message_id            String?
-  failure_reason                  String?
-  created_at                        DateTime                  @default(now())
+  id                  String                    @id @default(uuid()) @db.Uuid
+  notification_id     String                    @db.Uuid
+  attempt_number      Int
+  status              NotificationAttemptStatus
+  attempted_at        DateTime
+  provider_message_id String?
+  failure_reason      String?
+  created_at          DateTime                  @default(now())
 
   notification Notification @relation(fields: [notification_id], references: [id], onDelete: Restrict)
 
@@ -1031,20 +1040,20 @@ enum InquiryOutcome {
 }
 
 model Inquiry {
-  id                 String          @id @default(uuid()) @db.Uuid
-  full_name           String
-  email                 String
-  phone_number            String
-  subject                   String?
-  message                     String
-  status                       InquiryStatus   @default(New)
-  outcome                        InquiryOutcome?
-  linked_member_id                  String?         @db.Uuid
-  created_at                          DateTime        @default(now())
-  updated_at                            DateTime        @updatedAt
+  id               String          @id @default(uuid()) @db.Uuid
+  full_name        String
+  email            String
+  phone_number     String
+  subject          String?
+  message          String
+  status           InquiryStatus   @default(New)
+  outcome          InquiryOutcome?
+  linked_member_id String?         @db.Uuid
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
 
-  linked_member    Member?               @relation(fields: [linked_member_id], references: [id], onDelete: SetNull)
-  follow_up_notes  InquiryFollowUpNote[]
+  linked_member   Member?               @relation(fields: [linked_member_id], references: [id], onDelete: SetNull)
+  follow_up_notes InquiryFollowUpNote[]
 
   @@index([status])
   @@index([linked_member_id])
@@ -1057,14 +1066,14 @@ model Inquiry {
 /// Therefore Inquiry intentionally has no created_by field.
 
 model InquiryFollowUpNote {
-  id           String   @id @default(uuid()) @db.Uuid
-  inquiry_id     String  @db.Uuid
-  created_by       String  @db.Uuid
-  note                String
-  created_at            DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  inquiry_id String   @db.Uuid
+  created_by String   @db.Uuid
+  note       String
+  created_at DateTime @default(now())
 
-  inquiry           Inquiry @relation(fields: [inquiry_id], references: [id], onDelete: Restrict)
-  created_by_user   User    @relation("InquiryFollowUpCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
+  inquiry         Inquiry @relation(fields: [inquiry_id], references: [id], onDelete: Restrict)
+  created_by_user User    @relation("InquiryFollowUpCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
 
   @@index([inquiry_id])
   @@index([created_by])
@@ -1110,18 +1119,18 @@ enum AuditRelatedEntityType {
 }
 
 model AuditLog {
-  id                    String                   @id @default(uuid()) @db.Uuid
-  user_id                 String?                @db.Uuid
-  event_type                AuditEventType
-  action                       String
-  outcome                         AuditOutcome
-  related_entity_type                AuditRelatedEntityType?
-  related_entity_id                     String?               @db.Uuid
-  ip_address                               Unsupported("inet")?
-  user_agent                                  String?
-  details                                        Json?
-  occurred_at                                       DateTime
-  created_at                                           DateTime              @default(now())
+  id                  String                  @id @default(uuid()) @db.Uuid
+  user_id             String?                 @db.Uuid
+  event_type          AuditEventType
+  action              String
+  outcome             AuditOutcome
+  related_entity_type AuditRelatedEntityType?
+  related_entity_id   String?                 @db.Uuid
+  ip_address          Unsupported("inet")?
+  user_agent          String?
+  details             Json?
+  occurred_at         DateTime
+  created_at          DateTime                @default(now())
 
   user User? @relation("AuditLogUser", fields: [user_id], references: [id], onDelete: SetNull)
 

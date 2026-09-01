@@ -1,9 +1,7 @@
 const workoutProgramsService = require('./workout-programs.service');
 const { ok, created } = require('../../lib/apiResponse');
 
-// Feature 5 — Trainer Management & Workout Programs (Pass 2)
 // Thin by design: no Prisma, no permission checks, no business rules.
-// Just: pull validated input off req, call the service, shape the response.
 
 async function createTemplate(req, res) {
   const result = await workoutProgramsService.createTemplate(req.body, req.user);

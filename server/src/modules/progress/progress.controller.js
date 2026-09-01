@@ -1,13 +1,45 @@
-const progressService = require('./progress.service');
+const workoutProgressService = require('./progress.service');
 const { ok, created } = require('../../lib/apiResponse');
 
-// Feature 8 — Member Progress Tracking
-// Controllers stay thin: validate input, call the service, shape the
-// response envelope. Business logic belongs in progress.service.js.
+// Feature 8 — Progress Tracking (Body Measurements + Personal Records)
+// Thin by design: no Prisma, no permission checks, no PR calculation
+// logic. updatePersonalRecordsFromSession has no controller function at
+// all — it's never called from a route, only from
+// workout-logging.service.js's finalizeSession.
 
-// TODO: implement controller functions matching the routes in
-// progress.routes.js, following auth.controller.js as the reference pattern.
+// --- Body Measurements ----------------------------------------------------
+
+async function createBodyMeasurement(req, res) {
+  const result = await workoutProgressService.createBodyMeasurement(req.body, req.user);
+  return created(res, result);
+}
+
+async function listMeasurements(req, res) {
+  const result = await workoutProgressService.listMeasurements(req.query, req.user);
+  return ok(res, result);
+}
+
+async function getMeasurement(req, res) {
+  const result = await workoutProgressService.getMeasurement(req.params.id, req.user);
+  return ok(res, result);
+}
+
+// --- Personal Records -------------------------------------------------------
+
+async function listPersonalRecords(req, res) {
+  const result = await workoutProgressService.listPersonalRecords(req.query, req.user);
+  return ok(res, result);
+}
+
+async function getPersonalRecord(req, res) {
+  const result = await workoutProgressService.getPersonalRecord(req.params.id, req.user);
+  return ok(res, result);
+}
 
 module.exports = {
-  // e.g. list, getById, create, update, ...
+  createBodyMeasurement,
+  listMeasurements,
+  getMeasurement,
+  listPersonalRecords,
+  getPersonalRecord,
 };
