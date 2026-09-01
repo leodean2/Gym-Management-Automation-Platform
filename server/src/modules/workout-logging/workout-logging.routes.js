@@ -28,6 +28,36 @@ const {
 // --- /api/v1/workout-sessions ------------------------------------------------
 const sessionsRouter = express.Router();
 
+/**
+ * @openapi
+ * tags:
+ *   name: Workout Logging
+ *   description: Performed workout sessions and logged exercises
+ */
+
+/**
+ * @openapi
+ * /workout-sessions:
+ *   post:
+ *     tags: [Workout Logging]
+ *     summary: Start a Workout Session against an assigned program
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [workout_program_assignment_id, workout_program_session_id, session_date]
+ *             properties:
+ *               workout_program_assignment_id: { type: string, format: uuid }
+ *               workout_program_session_id: { type: string, format: uuid }
+ *               session_date: { type: string, format: date }
+ *               notes: { type: string }
+ *     responses:
+ *       201: { description: WorkoutSession created, status InProgress }
+ *       409: { description: Assignment is not Active, or session/template mismatch }
+ */
 sessionsRouter.post(
   '/',
   authenticate,
@@ -36,6 +66,20 @@ sessionsRouter.post(
   asyncHandler(workoutLoggingController.createSession)
 );
 
+/**
+ * @openapi
+ * /workout-sessions:
+ *   get:
+ *     tags: [Workout Logging]
+ *     summary: List Workout Sessions
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [InProgress, Finalized] }
+ *     responses:
+ *       200: { description: Paginated list, scoped to requester's role }
+ */
 sessionsRouter.get(
   '/',
   authenticate,
@@ -44,6 +88,21 @@ sessionsRouter.get(
   asyncHandler(workoutLoggingController.listSessions)
 );
 
+/**
+ * @openapi
+ * /workout-sessions/{id}:
+ *   get:
+ *     tags: [Workout Logging]
+ *     summary: Get a Workout Session (with logged exercises)
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: Session detail }
+ */
 sessionsRouter.get(
   '/:id',
   authenticate,
@@ -51,6 +110,26 @@ sessionsRouter.get(
   asyncHandler(workoutLoggingController.getSession)
 );
 
+/**
+ * @openapi
+ * /workout-sessions/{id}/finalize:
+ *   patch:
+ *     tags: [Workout Logging]
+ *     summary: Finalize a Workout Session (becomes read-only)
+ *     description: >
+ *       Triggers automatic Personal Record recalculation as a side
+ *       effect (see Progress module) — best-effort, does not block this
+ *       response on success.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: Session marked Finalized }
+ *       409: { description: Session is not InProgress }
+ */
 // PATCH /api/v1/workout-sessions/:id/finalize
 // No admin override — "Member manually Finalizes," Trainer may finalize
 // on behalf of their assigned member. GymOwner/SuperAdmin deliberately
@@ -63,6 +142,32 @@ sessionsRouter.patch(
   asyncHandler(workoutLoggingController.finalizeSession)
 );
 
+/**
+ * @openapi
+ * /workout-sessions/{id}/reopen:
+ *   patch:
+ *     tags: [Workout Logging]
+ *     summary: Reopen a Finalized session
+ *     description: Reuses the same row (completed_at cleared); records a WorkoutSessionReopenHistory entry. Member cannot reopen.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason: { type: string }
+ *     responses:
+ *       200: { description: Session reopened, status InProgress }
+ *       409: { description: Session is not Finalized }
+ */
 // PATCH /api/v1/workout-sessions/:id/reopen
 // Member deliberately excluded — finalized data is Trainer/Admin-
 // controlled, same integrity principle as Booking reopening elsewhere.
@@ -74,6 +179,45 @@ sessionsRouter.patch(
   asyncHandler(workoutLoggingController.reopenSession)
 );
 
+/**
+ * @openapi
+ * /workout-sessions/{id}/exercises:
+ *   post:
+ *     tags: [Workout Logging]
+ *     summary: Log a performed exercise
+ *     description: >
+ *       template_exercise_id is derived server-side (matched against the
+ *       session's prescribed exercises) — never accepted from the
+ *       client. Only callable while the session is InProgress.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [exercise_library_entry_id]
+ *             properties:
+ *               exercise_library_entry_id: { type: string, format: uuid }
+ *               performed_sets: { type: integer }
+ *               performed_reps: { type: integer }
+ *               performed_weight: { type: number }
+ *               rest_seconds: { type: integer }
+ *               duration_seconds: { type: integer }
+ *               distance: { type: number }
+ *               perceived_exertion: { type: integer, minimum: 1, maximum: 10 }
+ *               notes: { type: string }
+ *     responses:
+ *       201:
+ *         description: Logged exercise, with template_exercise_id auto-derived (null if ad-hoc)
+ *       409:
+ *         description: Session is not InProgress
+ */
 // POST /api/v1/workout-sessions/:id/exercises
 // Route-level check is broad; the service's InProgress gate is what
 // actually enforces "Finalized session is read-only," not role alone.
@@ -88,6 +232,22 @@ sessionsRouter.post(
 // --- /api/v1/workout-exercises ------------------------------------------------
 const exercisesRouter = express.Router();
 
+/**
+ * @openapi
+ * /workout-exercises/{id}:
+ *   patch:
+ *     tags: [Workout Logging]
+ *     summary: Update a logged exercise's performed values
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: Updated logged exercise }
+ *       409: { description: The exercise's session is Finalized }
+ */
 exercisesRouter.patch(
   '/:id',
   authenticate,

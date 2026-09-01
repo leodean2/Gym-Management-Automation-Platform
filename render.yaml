@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: gymrocks-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: BCRYPT_COST_FACTOR
+        value: 12
+      - key: LOGIN_MAX_FAILED_ATTEMPTS
+        value: 5
+      - key: LOGIN_LOCKOUT_MINUTES
+        value: 15
+      - key: PASSWORD_RESET_TOKEN_TTL_MINUTES
+        value: 60
+      - key: RATE_LIMIT_WINDOW_MINUTES
+        value: 15
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+      - key: LOGIN_RATE_LIMIT_MAX_REQUESTS
+        value: 10
+      - key: INQUIRY_RATE_LIMIT_MAX_REQUESTS
+        value: 5
+      - key: MEMBERSHIP_PAYMENT_WINDOW_HOURS
+        value: 48
+      - key: NOTIFICATION_FROM_EMAIL
+        value: no-reply@gymrocksfitness.com
+      - key: CLIENT_ORIGIN
+        sync: false

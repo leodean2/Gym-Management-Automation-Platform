@@ -30,6 +30,73 @@ router.post(
   asyncHandler(exerciseLibraryController.createExercise)
 );
 
+/**
+ * @openapi
+ * tags:
+ *   name: Exercise Library
+ *   description: Exercise library — create, list, view, update, deactivate, reactivate
+ */
+
+/**
+ * @openapi
+ * /exercise-library:
+ *   get:
+ *     tags: [Exercise Library]
+ *     summary: List exercise library entries
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: exercise_type
+ *         schema: { type: string, enum: [Weighted, Bodyweight, Cardio] }
+ *       - in: query
+ *         name: category
+ *         schema: { type: string, enum: [Strength, Cardio, Flexibility, Mobility, Rehabilitation] }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [Active, Inactive] }
+ *       - in: query
+ *         name: muscle_group
+ *         schema: { type: string }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Paginated list of exercises
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: string, format: uuid }
+ *                           name: { type: string }
+ *                           category: { type: string }
+ *                           exercise_type: { type: string }
+ *                           muscle_group: { type: string }
+ *                           status: { type: string }
+ *                     pagination:
+ *                       $ref: '#/components/schemas/Pagination'
+ *                 error: { type: 'null' }
+ *       401:
+ *         description: Missing or invalid token
+ *       403:
+ *         description: Role not permitted (VIEW_ROLES only)
+ */
 router.get(
   '/',
   authenticate,

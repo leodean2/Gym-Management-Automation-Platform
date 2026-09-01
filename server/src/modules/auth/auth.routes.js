@@ -8,6 +8,68 @@ const router = express.Router();
 
 // POST /api/v1/auth/login
 // NFR-S3: IP-based rate limiting, in addition to FR-1.2's per-account lockout.
+/**
+ * @openapi
+ * tags:
+ *   name: Auth
+ *   description: Authentication — login, password reset, password change
+ */
+
+/**
+ * @openapi
+ * /auth/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Log in and receive a JWT access token
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     access_token:
+ *                       type: string
+ *                     expires_in:
+ *                       type: string
+ *                       example: 8h
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id: { type: string, format: uuid }
+ *                         email: { type: string }
+ *                         role: { type: string, enum: [SuperAdmin, GymOwner, Receptionist, Trainer, Member] }
+ *                         account_status: { type: string }
+ *                         must_change_password: { type: boolean }
+ *                 error: { type: 'null' }
+ *       401:
+ *         description: Invalid email or password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       423:
+ *         description: Account temporarily locked due to repeated failed login attempts
+ */
 router.post('/login', loginLimiter, asyncHandler(authController.login));
 
 // POST /api/v1/auth/logout
