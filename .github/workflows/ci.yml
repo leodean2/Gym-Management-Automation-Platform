@@ -69,16 +69,5 @@ jobs:
       - name: Apply migrations
         run: npx prisma migrate deploy
 
-      - name: Apply manual SQL (btree_gist extension + booking exclusion constraint)
-        run: |
-          PGPASSWORD=gymrocks_ci_password psql -h localhost -U gymrocks -d gymrocks_ci -c "
-            CREATE EXTENSION IF NOT EXISTS btree_gist;
-            ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
-              EXCLUDE USING gist (
-                trainer_id WITH =,
-                tsrange(booking_date + start_time, booking_date + end_time) WITH &&
-              ) WHERE (status = 'Scheduled');
-          "
-
       - name: Run tests
         run: npm test
