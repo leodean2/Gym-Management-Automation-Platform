@@ -1,9 +1,11 @@
--- Required for a GiST exclusion constraint combining an equality column
--- (trainer_id) with a range overlap check.
-CREATE EXTENSION IF NOT EXISTS btree_gist;
-
-ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
-  EXCLUDE USING gist (
-    trainer_id WITH =,
-    tsrange(booking_date + start_time, booking_date + end_time) WITH &&
-  ) WHERE (status = 'Scheduled');
+-- No-op: this migration's intended SQL (the btree_gist extension and the
+-- bookings_no_overlap exclusion constraint) was already applied by the
+-- earlier migration 20260824000000_enable_btree_gist, which contains
+-- both statements. This file previously duplicated that same SQL,
+-- which caused P3018 / 42P07 ("relation already exists") when running
+-- `prisma migrate deploy` against a genuinely fresh database (e.g. CI) —
+-- on dev/test databases this was masked because this migration had been
+-- marked as applied via `prisma migrate resolve --applied` without ever
+-- actually executing its SQL, so the duplication was never exercised
+-- until a real from-scratch deploy ran both migrations for real.
+SELECT 1;
